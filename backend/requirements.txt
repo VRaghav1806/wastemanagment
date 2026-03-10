@@ -5,3 +5,4 @@ pymongo[srv]==4.10.1
 dnspython==2.7.0
 
 groq==0.18.0
+resend==2.6.0

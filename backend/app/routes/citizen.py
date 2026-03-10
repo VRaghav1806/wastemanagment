@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify
 import random
 import os
 import json
+import resend
 from datetime import datetime
 from groq import Groq
 from app.utils.data_manager import load_reports, save_reports, load_bins, get_eco_points_users, register_user, update_user_stats
@@ -10,6 +11,10 @@ citizen_bp = Blueprint('citizen', __name__)
 
 # Initialize Groq Client
 client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+
+# Initialize Resend
+resend.api_key = os.environ.get("RESEND_API_KEY")
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@example.com")
 
 @citizen_bp.route('/api/citizen/report', methods=['POST'])
 def citizen_report():
@@ -52,6 +57,30 @@ def citizen_report():
     if reporter_name:
         update_user_stats(reporter_name, 25)
         print(f"DEBUG: Credited 25 points to {reporter_name}")
+
+    # Send email notification to admin via Resend
+    try:
+        params = {
+            "from": "Circular Waste Intelligence <onboarding@resend.dev>",
+            "to": [ADMIN_EMAIL],
+            "subject": f"🚨 New Waste Report: {report['type']} at {report['location']}",
+            "html": f"""
+                <div style="font-family: sans-serif; padding: 20px; color: #333;">
+                    <h2 style="color: #ff5252;">New Waste Issue Reported</h2>
+                    <p><strong>Type:</strong> {report['type'].replace('_', ' ').title()}</p>
+                    <p><strong>Location:</strong> {report['location']}</p>
+                    <p><strong>Description:</strong> {report['description']}</p>
+                    <p><strong>Reporter:</strong> {report['reporter']}</p>
+                    <p><strong>Time:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+                    <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;" />
+                    <p style="font-size: 12px; color: #666;">This is an automated notification from the Circular Waste Intelligence Platform.</p>
+                </div>
+            """
+        }
+        resend_res = resend.Emails.send(params)
+        print(f"DEBUG: Notification email sent to {ADMIN_EMAIL}. Response: {resend_res}")
+    except Exception as e:
+        print(f"ERROR: Failed to send notification email: {e}")
     
     # Remove _id which was added by MongoDB insert_many to avoid serialization error
     if '_id' in report:
